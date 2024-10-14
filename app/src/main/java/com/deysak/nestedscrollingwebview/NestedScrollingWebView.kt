@@ -12,6 +12,25 @@
  *
  *  You should have received a copy of the GNU General Public License along with
  *  this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *
+ *  This file incorporates code under the following license:
+ *
+ *   Copyright (C) 2015 The Android Open Source Project
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ *
+ *  https://cs.android.com/androidx/platform/frameworks/support/+/5c27b70c8541f02542fca57734ac8d3be6db45a5:core/core/src/main/java/androidx/core/widget/NestedScrollView.java
  */
 
 package com.deysak.nestedscrollingwebview
@@ -24,6 +43,7 @@ import androidx.core.view.NestedScrollingChild
 import androidx.core.view.NestedScrollingChildHelper
 import androidx.core.view.ViewCompat
 import androidx.core.view.ViewCompat.ScrollAxis
+import androidx.core.widget.NestedScrollView
 
 /**
  * NestedScrollingWebView is-a [WebView] that implements [NestedScrollingChild].
@@ -38,9 +58,9 @@ import androidx.core.view.ViewCompat.ScrollAxis
  *
  * **Need:**
  * There is no default way to reliably support all the 3 aforementioned behaviors as:
- *  * Using [androidx.core.widget.NestedScrollView] interferes with the zoom
+ *  * Using [NestedScrollView] interferes with the zoom
  *  ([Issue-16135](https://github.com/ankidroid/Anki-Android/issues/16135)).
- * * Intercepting the scale motion events from [androidx.core.widget.NestedScrollView]
+ * * Intercepting the scale motion events from [NestedScrollView]
  * and passing it to [WebView] is unreliable.
  * * Hiding the toolbar by detecting scroll is unreliable.
  * * Workarounds for ensuring reliable zoom behavior interferes with scrolling.
@@ -59,45 +79,51 @@ class NestedScrollingWebView @JvmOverloads constructor(
 
     private val deltaX: Int = 0
 
-    private val mChildHelper: NestedScrollingChildHelper = NestedScrollingChildHelper(this)
+    /*
+     * https://developer.android.com/reference/androidx/core/view/NestedScrollingChild
+     * Classes implementing this interface should create a final instance of
+     * a NestedScrollingChildHelper as a field and delegate any View methods to
+     * the NestedScrollingChildHelper methods of the same signature.
+     */
+    private val childHelper: NestedScrollingChildHelper = NestedScrollingChildHelper(this)
 
-    private val mScrollOffset: IntArray = IntArray(2)
+    private val scrollOffset: IntArray = IntArray(2)
 
-    private val mScrollConsumed: IntArray = IntArray(2)
+    private val scrollConsumed: IntArray = IntArray(2)
 
-    private var mLastMotionY: Int = 0
+    private var lastMotionY: Int = 0
 
-    private var mNestedYOffset: Int = 0
+    private var nestedYOffset: Int = 0
 
     override fun onTouchEvent(motionEvent: MotionEvent): Boolean {
         val actionMasked: Int = motionEvent.actionMasked
         if (actionMasked == MotionEvent.ACTION_DOWN) {
-            mNestedYOffset = 0
+            nestedYOffset = 0
         }
 
         val velocityTrackerMotionEvent: MotionEvent = MotionEvent.obtain(motionEvent)
-        handleOffset(velocityTrackerMotionEvent, mNestedYOffset)
+        handleOffset(velocityTrackerMotionEvent, nestedYOffset)
 
         val motionEventY: Int = motionEvent.y.toInt()
         when (actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                mLastMotionY = motionEventY
+                lastMotionY = motionEventY
                 startNestedScroll(ViewCompat.SCROLL_AXIS_VERTICAL)
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val scrollDistanceY: Int = mLastMotionY - motionEventY
+                val scrollDistanceY: Int = lastMotionY - motionEventY
                 if (dispatchNestedPreScroll(
                         deltaX,
                         scrollDistanceY,
-                        mScrollConsumed,
-                        mScrollOffset
+                        scrollConsumed,
+                        scrollOffset
                     )
                 ) {
-                    handleOffset(velocityTrackerMotionEvent, mScrollOffset[yAxis])
-                    mNestedYOffset += mScrollOffset[yAxis]
+                    handleOffset(velocityTrackerMotionEvent, scrollOffset[yAxis])
+                    nestedYOffset += scrollOffset[yAxis]
                 }
-                mLastMotionY = motionEventY - mScrollOffset[yAxis]
+                lastMotionY = motionEventY - scrollOffset[yAxis]
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL,
@@ -114,25 +140,16 @@ class NestedScrollingWebView @JvmOverloads constructor(
         velocityTrackerMotionEvent.offsetLocation(deltaX.toFloat(), deltaY.toFloat())
     }
 
-    override fun setNestedScrollingEnabled(enabled: Boolean) {
-        mChildHelper.setNestedScrollingEnabled(enabled)
-    }
+    override fun setNestedScrollingEnabled(enabled: Boolean) =
+        childHelper.setNestedScrollingEnabled(enabled)
 
-    override fun isNestedScrollingEnabled(): Boolean {
-        return mChildHelper.isNestedScrollingEnabled
-    }
+    override fun isNestedScrollingEnabled() = childHelper.isNestedScrollingEnabled
 
-    override fun startNestedScroll(@ScrollAxis axes: Int): Boolean {
-        return mChildHelper.startNestedScroll(axes)
-    }
+    override fun startNestedScroll(@ScrollAxis axes: Int) = childHelper.startNestedScroll(axes)
 
-    override fun stopNestedScroll() {
-        mChildHelper.stopNestedScroll()
-    }
+    override fun stopNestedScroll() = childHelper.stopNestedScroll()
 
-    override fun hasNestedScrollingParent(): Boolean {
-        return mChildHelper.hasNestedScrollingParent()
-    }
+    override fun hasNestedScrollingParent() = childHelper.hasNestedScrollingParent()
 
     override fun dispatchNestedScroll(
         dxConsumed: Int,
@@ -140,34 +157,27 @@ class NestedScrollingWebView @JvmOverloads constructor(
         dxUnconsumed: Int,
         dyUnconsumed: Int,
         offsetInWindow: IntArray?
-    ): Boolean {
-        return mChildHelper.dispatchNestedScroll(
-            dxConsumed,
-            dyConsumed,
-            dxUnconsumed,
-            dyUnconsumed,
-            offsetInWindow
-        )
-    }
+    ) = childHelper.dispatchNestedScroll(
+        dxConsumed,
+        dyConsumed,
+        dxUnconsumed,
+        dyUnconsumed,
+        offsetInWindow
+    )
 
     override fun dispatchNestedPreScroll(
         dx: Int,
         dy: Int,
         consumed: IntArray?,
         offsetInWindow: IntArray?
-    ): Boolean {
-        return mChildHelper.dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow)
-    }
+    ) = childHelper.dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow)
 
     override fun dispatchNestedFling(
         velocityX: Float,
         velocityY: Float,
         consumed: Boolean
-    ): Boolean {
-        return mChildHelper.dispatchNestedFling(velocityX, velocityY, consumed)
-    }
+    ) = childHelper.dispatchNestedFling(velocityX, velocityY, consumed)
 
-    override fun dispatchNestedPreFling(velocityX: Float, velocityY: Float): Boolean {
-        return mChildHelper.dispatchNestedPreFling(velocityX, velocityY)
-    }
+    override fun dispatchNestedPreFling(velocityX: Float, velocityY: Float) =
+        childHelper.dispatchNestedPreFling(velocityX, velocityY)
 }
